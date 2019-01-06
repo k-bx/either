@@ -18,6 +18,7 @@ module Data.Either.ValidationT
   ) where
 
 import Data.Either.Validation
+import Control.Applicative (liftA2)
 
 -- | 'ValidationT' is 'Either' with a Left that is a 'Monoid'
 newtype ValidationT e m a =
@@ -32,33 +33,9 @@ instance (Functor m) => Functor (ValidationT e m) where
   fmap f = ValidationT . fmap (fmap f) . runValidationT
   {-# INLINE fmap #-}
 
-instance (Semigroup e, Functor m, Monad m) =>
+instance (Semigroup e, Functor m, Applicative m) =>
          Applicative (ValidationT e m) where
-  pure a = ValidationT $ return (Success a)
+  pure a = ValidationT $ pure (Success a)
   {-# INLINE pure #-}
-  ValidationT f <*> ValidationT v =
-    ValidationT $ do
-      mf <- f
-      case mf of
-        Failure e -> do
-          mv <- v
-          case mv of
-            Failure e2 -> return (Failure (e <> e2))
-            Success _ -> return (Failure e)
-        Success k -> do
-          mv <- v
-          case mv of
-            Failure e -> return (Failure e)
-            Success x -> return (Success (k x))
+  ValidationT f <*> ValidationT v = ValidationT $ liftA2 (<*>) f v
   {-# INLINEABLE (<*>) #-}
-  m *> k = m >>= \_ -> k
-  {-# INLINE (*>) #-}
-
-instance (Semigroup e, Monad m) => Monad (ValidationT e m) where
-  m >>= k =
-    ValidationT $ do
-      a <- runValidationT m
-      case a of
-        Failure e -> return (Failure e)
-        Success x -> runValidationT (k x)
-  {-# INLINE (>>=) #-}
